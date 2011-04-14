@@ -362,7 +362,7 @@ class Parser
       params = given_data[:params]
 
       opts = @specs[sym]
-      raise CommandlineError, "option '#{arg}' needs a parameter" if params.empty? && opts[:type] != :flag
+      raise CommandlineError, "option '#{arg}' needs a parameter" if params.empty? && opts[:type] != :flag and not opts[:allow_blank]
 
       vals["#{sym}_given".intern] = true # mark argument as specified on the commandline
 
@@ -383,7 +383,7 @@ class Parser
 
       if SINGLE_ARG_TYPES.include?(opts[:type])
         unless opts[:multi]       # single parameter
-          vals[sym] = vals[sym][0][0]
+          vals[sym] = vals[sym][0][0] rescue nil
         else                      # multiple options, each with a single parameter
           vals[sym] = vals[sym].map { |p| p[0] }
         end

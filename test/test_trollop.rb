@@ -42,14 +42,16 @@ class Trollop < ::Test::Unit::TestCase
     assert_raise(CommandlineError) { @p.parse(%w(--arg2 --arg3)) }
   end
   
-  ## flags that take an argument error unless given one
+  ## flags that take an argument error unless given one unless the argument is optional
   def test_argflags_demand_args
     @p.opt "goodarg", "desc", :type => String
     @p.opt "goodarg2", "desc", :type => String
-
+    @p.opt "goodarg3", "desc", :type => String, :allow_blank => true
+    
     assert_nothing_raised { @p.parse(%w(--goodarg goat)) }
     assert_raise(CommandlineError) { @p.parse(%w(--goodarg --goodarg2 goat)) }
     assert_raise(CommandlineError) { @p.parse(%w(--goodarg)) }
+    assert_nothing_raised { @p.parse(%w(--goodarg3)) }
   end
 
   ## flags that don't take arguments ignore them
