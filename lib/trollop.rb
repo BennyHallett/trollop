@@ -7,12 +7,12 @@ require 'date'
 
 module Trollop
 
-VERSION = "1.16.2"
+VERSION = "2.0"
 
 ## Thrown by Parser in the event of a commandline error. Not needed if
 ## you're using the Trollop::options entry.
 class CommandlineError < StandardError; end
-  
+
 ## Thrown by Parser if the user passes in '-h' or '--help'. Handled
 ## automatically by Trollop#options.
 class HelpNeeded < StandardError; end
@@ -154,12 +154,11 @@ class Parser
     ## a multi-valued argument. for that you have to specify a :type
     ## as well. (this is how we disambiguate an ambiguous situation;
     ## see the docs for Parser#opt for details.)
-    disambiguated_default =
-      if opts[:multi] && opts[:default].is_a?(Array) && !opts[:type]
-        opts[:default].first
-      else
-        opts[:default]
-      end
+    disambiguated_default = if opts[:multi] && opts[:default].is_a?(Array) && !opts[:type]
+      opts[:default].first
+    else
+      opts[:default]
+    end
 
     type_from_default =
       case disambiguated_default
@@ -193,15 +192,11 @@ class Parser
 
     ## fill in :long
     opts[:long] = opts[:long] ? opts[:long].to_s : name.to_s.gsub("_", "-")
-    opts[:long] =
-      case opts[:long]
-      when /^--([^-].*)$/
-        $1
-      when /^[^-]/
-        opts[:long]
-      else
-        raise ArgumentError, "invalid long option name #{opts[:long].inspect}"
-      end
+    opts[:long] = case opts[:long]
+      when /^--([^-].*)$/; $1
+      when /^[^-]/; opts[:long]
+      else; raise ArgumentError, "invalid long option name #{opts[:long].inspect}"
+    end
     raise ArgumentError, "long option name #{opts[:long].inspect} is already taken; please specify a (different) :long" if @long[opts[:long]]
 
     ## fill in :short
@@ -295,19 +290,26 @@ class Parser
       vals[sym] = [] if opts[:multi] && !opts[:default] # multi arguments default to [], not nil
     end
 
-    resolve_default_short_options
+    resolve_default_short_options!
 
     ## resolve symbols
     given_args = {}
     @leftovers = each_arg cmdline do |arg, params|
-      sym = case arg
-      when /^-([^-])$/
-        @short[$1]
-      when /^--([^-]\S*)$/
-        @long[$1]
+      ## handle --no- forms
+      arg, negative_given = if arg =~ /^--no-([^-]\S*)$/
+        ["--#{$1}", true]
       else
-        raise CommandlineError, "invalid argument syntax: '#{arg}'"
+        [arg, false]
       end
+
+      sym = case arg
+        when /^-([^-])$/; @short[$1]
+        when /^--([^-]\S*)$/; @long[$1] || @long["no-#{$1}"]
+        else; raise CommandlineError, "invalid argument syntax: '#{arg}'"
+      end
+
+      sym = nil if arg =~ /--no-/ # explicitly invalidate --no-no- arguments
+
       raise CommandlineError, "unknown argument '#{arg}'" unless sym
 
       if given_args.include?(sym) && !@specs[sym][:multi]
@@ -315,8 +317,8 @@ class Parser
       end
 
       given_args[sym] ||= {}
-
       given_args[sym][:arg] = arg
+      given_args[sym][:negative_given] = negative_given
       given_args[sym][:params] ||= []
 
       # The block returns the number of parameters taken.
@@ -358,17 +360,16 @@ class Parser
 
     ## parse parameters
     given_args.each do |sym, given_data|
-      arg = given_data[:arg]
-      params = given_data[:params]
+      arg, params, negative_given = given_data.values_at :arg, :params, :negative_given
 
       opts = @specs[sym]
-      raise CommandlineError, "option '#{arg}' needs a parameter" if params.empty? && opts[:type] != :flag and not opts[:allow_blank]
+      raise CommandlineError, "option '#{arg}' needs a parameter" if params.empty? && opts[:type] != :flag
 
       vals["#{sym}_given".intern] = true # mark argument as specified on the commandline
 
       case opts[:type]
       when :flag
-        vals[sym] = !opts[:default]
+        vals[sym] = (sym.to_s =~ /^no_/ ? negative_given : !negative_given)
       when :int, :ints
         vals[sym] = params.map { |pg| pg.map { |p| parse_integer_parameter p, arg } }
       when :float, :floats
@@ -383,7 +384,7 @@ class Parser
 
       if SINGLE_ARG_TYPES.include?(opts[:type])
         unless opts[:multi]       # single parameter
-          vals[sym] = vals[sym][0][0] rescue nil
+          vals[sym] = vals[sym][0][0]
         else                      # multiple options, each with a single parameter
           vals[sym] = vals[sym].map { |p| p[0] }
         end
@@ -415,19 +416,19 @@ class Parser
         # chronic is not available
       end
       time ? Date.new(time.year, time.month, time.day) : Date.parse(param)
-    rescue ArgumentError => e
+    rescue ArgumentError
       raise CommandlineError, "option '#{arg}' needs a date"
     end
   end
 
   ## Print the help message to +stream+.
   def educate stream=$stdout
-    width # just calculate it now; otherwise we have to be careful not to
+    width # hack: calculate it now; otherwise we have to be careful not to
           # call this unless the cursor's at the beginning of a line.
-
     left = {}
-    @specs.each do |name, spec| 
+    @specs.each do |name, spec|
       left[name] = "--#{spec[:long]}" +
+        (spec[:type] == :flag && spec[:default] ? ", --no-#{spec[:long]}" : "") +
         (spec[:short] && spec[:short] != :none ? ", -#{spec[:short]}" : "") +
         case spec[:type]
         when :flag; ""
@@ -627,7 +628,7 @@ private
     params
   end
 
-  def resolve_default_short_options
+  def resolve_default_short_options!
     @order.each do |type, name|
       next unless type == :opt
       opts = @specs[name]
@@ -662,7 +663,7 @@ private
   end
 
   ## instance_eval but with ability to handle block arguments
-  ## thanks to why: http://redhanded.hobix.com/inspect/aBlockCostume.html
+  ## thanks to _why: http://redhanded.hobix.com/inspect/aBlockCostume.html
   def cloaker &b
     (class << self; self; end).class_eval do
       define_method :cloaker_, &b
@@ -692,17 +693,16 @@ end
 ##
 ##   require 'trollop'
 ##   opts = Trollop::options do
-##     opt :monkey, "Use monkey mode"                     # a flag --monkey, defaulting to false
-##     opt :goat, "Use goat mode", :default => true       # a flag --goat, defaulting to true
-##     opt :num_limbs, "Number of limbs", :default => 4   # an integer --num-limbs <i>, defaulting to 4
-##     opt :num_thumbs, "Number of thumbs", :type => :int # an integer --num-thumbs <i>, defaulting to nil
+##     opt :monkey, "Use monkey mode"                    # a flag --monkey, defaulting to false
+##     opt :name, "Monkey name", :type => :string        # a string --name <s>, defaulting to nil
+##     opt :num_limbs, "Number of limbs", :default => 4  # an integer --num-limbs <i>, defaulting to 4
 ##   end
 ##
 ##   ## if called with no arguments
-##   p opts # => { :monkey => false, :goat => true, :num_limbs => 4, :num_thumbs => nil }
+##   p opts # => {:monkey=>false, :name=>nil, :num_limbs=>4, :help=>false}
 ##
 ##   ## if called with --monkey
-##   p opts # => {:monkey_given=>true, :monkey=>true, :goat=>true, :num_limbs=>4, :help=>false, :num_thumbs=>nil}
+##   p opts # => {:monkey=>true, :name=>nil, :num_limbs=>4, :help=>false, :monkey_given=>true}
 ##
 ## See more examples at http://trollop.rubyforge.org.
 def options args=ARGV, *a, &b
