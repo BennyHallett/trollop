@@ -1,3 +1,5 @@
+This is an old fork of trollop, you might want to check out the [2.0 version](http://masanjin.net/blog/label/trollop/)
+
 # trollop
 
 by William Morgan (http://masanjin.net/)
