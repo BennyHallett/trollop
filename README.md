@@ -1,4 +1,4 @@
-== trollop
+# trollop
 
 by William Morgan (http://masanjin.net/)
 
@@ -9,14 +9,14 @@ Release announcements and comments: http://all-thing.net/label/trollop
 Documentation quickstart: See Trollop.options and then Trollop::Parser#opt.
 Also see the examples at http://trollop.rubyforge.org/.
 
-== DESCRIPTION
+## DESCRIPTION
 
 Trollop is a commandline option parser for Ruby that just gets out of your
 way. One line of code per option is all you need to write. For that, you get a
 nice automatically-generated help page, robust option parsing, command
 subcompletion, and sensible defaults for everything you don't specify.
 
-== FEATURES/PROBLEMS
+## FEATURES/PROBLEMS
 
 - Dirt-simple usage.
 - Sensible defaults. No tweaking necessary, much tweaking possible.
@@ -26,16 +26,28 @@ subcompletion, and sensible defaults for everything you don't specify.
 - Automatic help message generation, wrapped to current screen width.
 - Lots of unit tests.
 
-== REQUIREMENTS
+## REQUIREMENTS
 
 * A burning desire to write less code.
 
-== INSTALL
+## INSTALL
 
-* gem install trollop
+Add this line to your application's Gemfile:
+```
+gem 'trollop'
+```
+then run:
+```
+bundle install
+```
 
-== SYNOPSIS
+Or install it yourself as:
+```
+$ gem install trollop
+```
 
+## SYNOPSIS
+```
   require 'trollop'
   opts = Trollop::options do
     opt :monkey, "Use monkey mode"                     # flag --monkey, default false
@@ -45,8 +57,9 @@ subcompletion, and sensible defaults for everything you don't specify.
   end
 
   p opts # a hash: { :monkey => false, :goat => true, :num_limbs => 4, :num_thumbs => nil }
+```
 
-== LICENSE
+## LICENSE
 
 Copyright (c) 2008--2009 William Morgan. Trollop is distributed under the same
 terms as Ruby.
